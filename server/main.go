@@ -3,39 +3,20 @@ package main
 import (
 	"fmt"
 	"os"
-	"strconv"
 
+	"github.com/TheScenery/timeline/server/database"
 	"github.com/jackc/pgx"
 )
 
 func main() {
-	const host string = "localhost"
-	const database string = "timeline"
-	port, err := strconv.ParseUint(os.Getenv("PGPORT"), 10, 16)
+
+	db, err := database.InitDatabase()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(-1)
 	}
-	user := os.Getenv("PGUSER")
-	password := os.Getenv("PGPASSWORD")
 
-	connconfig := pgx.ConnConfig{
-		Host:     host,
-		Port:     uint16(port),
-		Database: database,
-		User:     user,
-		Password: password,
-	}
-
-	connPoolConfig := pgx.ConnPoolConfig{
-		ConnConfig: connconfig,
-	}
-
-	connPool, err := pgx.NewConnPool(connPoolConfig)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(-1)
-	}
+	connPool := db.GetConnPool()
 
 	result, err := connPool.Exec(`CREATE TABLE events (
 		subject text,
@@ -47,9 +28,31 @@ func main() {
 		os.Exit(-1)
 	}
 
-	connPool.Exec("insert into events(subject, description) values($1, $2)", "Test Subject", "This is a test subject")
+	fmt.Println(result)
+
+	result, err = connPool.Exec("insert into events(subject, description) values($1, $2)", "Test Subject", "This is a test subject")
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(-1)
+	}
 
 	fmt.Println(result)
 
-	fmt.Println(connPoolConfig)
+	rows, err := connPool.Query("select * from events")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	for rows.Next() {
+		var subject string
+		var description string
+		err := rows.Scan(&subject, &description)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Printf("%s %s\n", subject, description)
+	}
+
+	fmt.Println(rows.FieldDescriptions())
 }
